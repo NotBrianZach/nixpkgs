@@ -11,8 +11,7 @@ let
     if cfg.extraPlugins == [] then pg
     else pkgs.buildEnv {
       name = "postgresql-and-plugins-${(builtins.parseDrvName pg.name).version}";
-      paths = [ pg pg.lib ] ++ cfg.extraPlugins;
-      buildInputs = [ pkgs.makeWrapper ];
+      paths = [ pg pg.lib ] ++ cfg.extraPlugins; buildInputs = [ pkgs.makeWrapper ];
       postBuild =
         ''
           mkdir -p $out/bin
@@ -77,6 +76,15 @@ in
         default = "/var/db/postgresql";
         description = ''
           Data directory for PostgreSQL.
+        '';
+      };
+
+      isOnVbox = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Tells postgresql whether to do certain setup steps based on whether or not
+          it will run on virtualbox, or say ec2
         '';
       };
 
@@ -241,10 +249,19 @@ in
                 if ! kill -0 "$MAINPID"; then exit 1; fi
                 sleep 0.1
             done
+            echo "HELLO ARE YOU THERE THIS IS CUSTOM postgresql POSTSTART"
+            if ${cfg.isOnVbox}; then
+              mkdir /dbInit # /mnt/dbInit
+              cd /
+              mount vboxsf dbInit ./dbInit # /mnt/$sharename, would be second arg
+            fi
+
 
             if test -e "${cfg.dataDir}/.first_startup"; then
               ${optionalString (cfg.initialScript != null) ''
                 psql -f "${cfg.initialScript}" --port=${toString cfg.port} postgres
+                psql  --port=${toString cfg.port} postgres -c "create table poop (test int);"
+                # sqitch deploy
               ''}
               rm -f "${cfg.dataDir}/.first_startup"
             fi
